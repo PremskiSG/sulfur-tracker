@@ -6,6 +6,14 @@ shown as a slim one-line readout at the top (no gauge), and there is no news fee
 """
 from __future__ import annotations
 
+import os
+import sys
+
+# Make the `sulfur_tracker` package importable when run as a bare script (e.g. Streamlit
+# Cloud does `streamlit run sulfur_tracker/dashboard.py` without pip-installing the pkg):
+# add the repo root (parent of this package dir) to sys.path.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
