@@ -1,0 +1,70 @@
+# sulfur-tracker configuration.
+# The composite recomputes from whatever collectors succeed, so disabling one or
+# lacking its credentials just lowers coverage % -- it never breaks a run.
+
+headline_cadence_days: 14        # `tracker run` cadence (cron every 2 weeks)
+
+fx:
+  usd_cny: 7.15                  # fallback USDCNY for USD-equivalent display (live via yfinance)
+
+http:
+  user_agent: "sulfur-tracker/0.1 (+research)"
+  timeout: 15
+
+scoring:
+  baseline_days: 90              # trailing window for per-signal z-scores
+  min_points_for_z: 2
+  z_clip: 3.0                    # clip weighted-mean z before scaling to +/-100
+  zones:                         # composite thresholds (positive = tightening)
+    acute: 60
+    tightening: 20
+    easing: -20
+    acute_easing: -60
+  contamination:
+    news_window_days: 21
+    curtailment_keywords:
+      - curtailment
+      - care and maintenance
+      - suspend
+      - output cut
+      - force majeure
+
+collectors:
+  # --- Tier 1 (weight 3) ---
+  sulfur_price_cn:
+    enabled: true
+    url: https://tradingeconomics.com/commodity/sulfur
+    min_interval: 2.0
+  indonesia_imports:
+    enabled: true
+    lag_months: 2                # Comtrade lags ~2 months; anchor = now - lag
+    min_interval: 2.0
+  china_port_inventory:
+    enabled: true
+    scrape_metal_com: false      # unreliable JS scrape; default off -> manual entry
+  ais_gulf_transits:
+    enabled: true                # no AIS key -> manual entry (see secrets.yaml)
+
+  # --- Gulf supply price signals ---
+  fob_prices_mideast:
+    enabled: true                # manual entry (KSP / Adnoc OSP)
+  llm_price_scan:
+    enabled: false               # opt-in: needs a DeepSeek key (secrets.yaml deepseek.api_key)
+    model: deepseek-v4-flash     # cheap; deepseek-v4-pro for higher accuracy
+    lookback_days: 120           # how far back to read news headlines
+    # run WEEKLY with `tracker scan-prices` (fills ksp_fob + adnoc_osp_fob + tampa_sulfur_cfr
+    # from news). A weekly re-run only writes a point when the price actually changes.
+  fred_acid:
+    enabled: true                # reference-only: US sulfuric-acid PPI (FRED WPU0613020T1).
+    # Free CSV works keyless; add fred.api_key to secrets.yaml for the API path.
+
+  # --- Background (not scored) ---
+  news_monitor:
+    enabled: true                # only feeds the contamination check now
+    min_interval: 1.5
+    feeds:
+      - https://www.mining.com/feed/
+      - https://news.google.com/rss/search?q=%22sulphur%22+OR+%22HPAL%22+nickel&hl=en-US&gl=US&ceid=US:en
+      - https://news.google.com/rss/search?q=Hormuz+sulphur+OR+phosphate&hl=en-US&gl=US&ceid=US:en
+
+# baselines are seeded by `tracker backfill` (see sulfur_tracker/seeds.py)

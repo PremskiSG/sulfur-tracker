@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "streamlit",
+      "runtimeArgs": ["run", "sulfur_tracker/dashboard.py", "--server.headless", "true", "--server.port", "8760"],
+      "port": 8760
+    }
+  ]
+}
