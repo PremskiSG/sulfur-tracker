@@ -29,7 +29,7 @@ def world_kt(payload: dict) -> float | None:
     per-partner rows carry the weight. So we prefer the World row only when it has a
     positive weight, and otherwise sum the individual partner rows.
     """
-    rows = payload.get("data") or []
+    rows = agg_rows(payload)
     if not rows:
         return None
     world = next((r for r in rows if r.get("partnerCode") == 0), None)
@@ -39,6 +39,14 @@ def world_kt(payload: dict) -> float | None:
     if not total:
         return None
     return round(total / 1_000_000.0, 1)  # kg -> kt
+
+
+def agg_rows(payload: dict) -> list[dict]:
+    """Comtrade repeats each partner once per mode-of-transport *plus* an all-modes
+    aggregate (motCode 0). Keep only the aggregate or every total double-counts."""
+    rows = payload.get("data") or []
+    agg = [r for r in rows if r.get("motCode") in (0, None)]
+    return agg or rows
 
 
 def _shift_month(y: int, m: int, delta: int) -> tuple[int, int]:

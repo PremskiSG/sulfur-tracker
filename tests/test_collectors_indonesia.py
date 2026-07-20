@@ -19,6 +19,26 @@ def test_world_kt_falls_back_to_partner_sum():
     assert world_kt(payload) == 3.0
 
 
+def test_world_kt_dedupes_mode_of_transport():
+    """Comtrade repeats each partner per motCode plus an all-modes (0) aggregate —
+    summing everything would double-count."""
+    payload = {"data": [
+        {"partnerCode": 156, "motCode": 0, "netWgt": 1_000_000},
+        {"partnerCode": 156, "motCode": 2100, "netWgt": 1_000_000},
+        {"partnerCode": 842, "motCode": 0, "netWgt": 2_000_000},
+        {"partnerCode": 842, "motCode": 2100, "netWgt": 2_000_000},
+    ]}
+    assert world_kt(payload) == 3.0        # not 6.0
+
+
+def test_world_kt_prefers_all_modes_world_row():
+    payload = {"data": [
+        {"partnerCode": 0, "motCode": 2100, "netWgt": 300_000_000},
+        {"partnerCode": 0, "motCode": 0, "netWgt": 374_200_000},
+    ]}
+    assert world_kt(payload) == 374.2
+
+
 def test_world_kt_empty():
     assert world_kt({"data": []}) is None
 
