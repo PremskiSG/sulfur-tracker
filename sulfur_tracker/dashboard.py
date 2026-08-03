@@ -215,6 +215,17 @@ def _flow_table(conn, reporter: int, flow: str):
     return df[keep]
 
 
+def _display_frame(df):
+    """String-formatted copy for st.table: blanks for missing, 1dp for kt, % for share."""
+    out = df.copy()
+    for col in out.columns:
+        if col == "Gulf %":
+            out[col] = out[col].map(lambda v: "" if pd.isna(v) else f"{v:.0f}%")
+        else:
+            out[col] = out[col].map(lambda v: "" if pd.isna(v) else f"{v:,.1f}")
+    return out
+
+
 def _trade_flows_section(conn) -> None:
     st.divider()
     st.subheader("Trade flows (Comtrade)")
@@ -238,9 +249,9 @@ def _trade_flows_section(conn) -> None:
             st.caption("kt per month by "
                        + ("origin" if c["flow"] == "M" else "destination")
                        + " — blank = no recorded shipments that month")
-            st.dataframe(df, use_container_width=True,
-                         column_config={"Gulf %": st.column_config.NumberColumn(
-                             "Gulf %", format="%d%%")} if c["flow"] == "M" else None)
+            # st.table renders the whole thing statically: every month visible at once,
+            # no inner scrollbar (st.dataframe caps the height and virtualizes).
+            st.table(_display_frame(df))
 
 
 main()
