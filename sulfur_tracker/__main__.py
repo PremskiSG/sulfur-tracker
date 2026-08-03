@@ -128,6 +128,9 @@ def build_parser() -> argparse.ArgumentParser:
     ip = sub.add_parser("import-prices", help="import a JSON price-history file")
     ip.add_argument("path", help="path to JSON: {'unit':..,'data':[{'date','price'},..]}")
     ip.add_argument("--metric", default="sulfur_price_cn")
+    tf = sub.add_parser("trade-flows",
+                        help="backfill the browse-only per-country trade matrix (slow)")
+    tf.add_argument("--months", type=int, default=18)
     sub.add_parser("scan-prices",
                    help="LLM scan of news for KSP/Adnoc prices (needs DeepSeek key)")
     i = sub.add_parser("input", help="manual data entry")
@@ -170,6 +173,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "import-prices":
         n = history.import_price_json(conn, args.path, metric=args.metric)
         print(f"  imported {n} price points into {args.metric}")
+        return 0
+    if args.cmd == "trade-flows":
+        print(f"  fetching {args.months} months of trade flows for 6 countries (slow)...")
+        counts = history.backfill_trade_flows(conn, months=args.months)
+        for k, v in counts.items():
+            print(f"  {k:<12} {v} partner-rows")
+        print(f"  total trade_flows rows: {db.flow_count(conn)}")
         return 0
     if args.cmd == "scan-prices":
         from sulfur_tracker.collectors.llm_price_scan import LlmPriceScan

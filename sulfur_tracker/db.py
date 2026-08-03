@@ -47,6 +47,18 @@ CREATE TABLE IF NOT EXISTS news_items (
   matched_keywords TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Bilateral sulfur trade matrix (browse-only, NOT a scored signal). Unlike signals this
+-- is a fixed historical matrix, so rows are upserted (a month's breakdown never changes).
+CREATE TABLE IF NOT EXISTS trade_flows (
+  reporter INTEGER NOT NULL,               -- M49 code of the reporting country
+  flow TEXT NOT NULL,                      -- M = imports, X = exports
+  partner_code INTEGER NOT NULL,           -- M49 code of the origin/destination
+  period TEXT NOT NULL,                    -- YYYYMM
+  kt REAL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (reporter, flow, partner_code, period)
+);
 """
 
 
@@ -154,3 +166,36 @@ def latest_run(conn) -> sqlite3.Row | None:
         "SELECT * FROM runs WHERE composite IS NOT NULL "
         "ORDER BY started_at DESC LIMIT 1"
     ).fetchone()
+
+
+# --- trade_flows (browse-only bilateral matrix) ---
+
+def upsert_flow(conn, reporter: int, flow: str, partner_code: int, period: str,
+                kt: float) -> None:
+    conn.execute(
+        "INSERT INTO trade_flows (reporter, flow, partner_code, period, kt, updated_at) "
+        "VALUES (?,?,?,?,?, datetime('now')) "
+        "ON CONFLICT(reporter, flow, partner_code, period) "
+        "DO UPDATE SET kt=excluded.kt, updated_at=datetime('now')",
+        (reporter, flow, partner_code, period, kt),
+    )
+
+
+def flow_matrix(conn, reporter: int, flow: str) -> list[sqlite3.Row]:
+    """All (partner_code, period, kt) rows for a reporter/flow, oldest period first."""
+    return conn.execute(
+        "SELECT partner_code, period, kt FROM trade_flows "
+        "WHERE reporter=? AND flow=? ORDER BY period ASC",
+        (reporter, flow),
+    ).fetchall()
+
+
+def flow_periods(conn, reporter: int, flow: str) -> list[str]:
+    rows = conn.execute(
+        "SELECT DISTINCT period FROM trade_flows WHERE reporter=? AND flow=? "
+        "ORDER BY period ASC", (reporter, flow)).fetchall()
+    return [r["period"] for r in rows]
+
+
+def flow_count(conn) -> int:
+    return int(conn.execute("SELECT COUNT(*) c FROM trade_flows").fetchone()["c"])

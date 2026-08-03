@@ -29,6 +29,26 @@ def test_news_dedupe_on_url(conn):
     assert not db.insert_news(conn, rid, "2026-07-01", "s", "h", "http://a", "tightening", "x")
 
 
+def test_trade_flow_upsert_is_idempotent(conn):
+    db.upsert_flow(conn, 360, "M", 784, "202603", 110.0)
+    db.upsert_flow(conn, 360, "M", 784, "202603", 111.5)   # same key -> replaces
+    conn.commit()
+    rows = db.flow_matrix(conn, 360, "M")
+    assert len(rows) == 1
+    assert rows[0]["kt"] == 111.5
+
+
+def test_flow_matrix_and_periods(conn):
+    for partner, period, kt in [(784, "202602", 35.1), (784, "202603", 110.0),
+                                (682, "202603", 95.4)]:
+        db.upsert_flow(conn, 360, "M", partner, period, kt)
+    conn.commit()
+    assert db.flow_periods(conn, 360, "M") == ["202602", "202603"]
+    assert len(db.flow_matrix(conn, 360, "M")) == 3
+    assert db.flow_matrix(conn, 842, "X") == []          # other reporter unaffected
+    assert db.flow_count(conn) == 3
+
+
 def test_latest_signal(conn):
     rid = db.start_run(conn, "collect")
     db.insert_signal(conn, rid, _sig("m", 1.0, "2026-07-01"))

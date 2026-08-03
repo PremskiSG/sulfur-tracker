@@ -137,6 +137,35 @@ def backfill_fred_acid(conn) -> int:
     return len(obs)
 
 
+def backfill_trade_flows(conn, months: int = 18, lag: int = 2) -> dict[str, int]:
+    """Populate the browse-only trade_flows matrix: for each of the six countries, the
+    full partner breakdown for the last `months` months. Slow (~6 x months Comtrade
+    calls); upserts, so it's safe to re-run. Returns {country: rows_written}."""
+    from sulfur_tracker.collectors.comtrade_flows import fetch_flows
+    from sulfur_tracker.collectors.indonesia_imports import _shift_month
+    from sulfur_tracker.countries import TRADE_COUNTRIES
+
+    today = date.today()
+    counts: dict[str, int] = {}
+    for c in TRADE_COUNTRIES:
+        written = 0
+        for i in range(lag, lag + months):
+            yy, mm = _shift_month(today.year, today.month, -i)
+            period = f"{yy}{mm:02d}"
+            try:
+                flows = fetch_flows(c["reporter"], c["flow"], period)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("flows %s %s failed: %s", c["name"], period, exc)
+                continue
+            for partner, kt in flows.items():
+                db.upsert_flow(conn, c["reporter"], c["flow"], partner, period, kt)
+                written += 1
+        conn.commit()
+        counts[c["name"]] = written
+        log.info("trade_flows %s: %d partner-rows", c["name"], written)
+    return counts
+
+
 def backfill_history(conn, months: int = 18) -> dict[str, int]:
     # NCKL.JK anchor history dropped — nickel reference prices are no longer displayed.
     return {
