@@ -163,52 +163,56 @@ def main() -> None:
     _trade_flows_section(conn)
 
 
-def _flow_frame(conn, reporter: int, flow: str):
-    """Full partner x month matrix (kt) as a DataFrame; partners as rows (Gulf first,
-    then by total desc), periods as YYYY-MM columns. Returns (df, gulf_pct_by_period)."""
+# Gulf columns always shown (in this order) for importers, so the table reads the same
+# month to month even when a supplier drops to zero — that zero IS the signal.
+GULF_ORDER = [784, 682, 414, 48, 512, 634, 364, 368]
+MAX_NAMED_NON_GULF = 3     # importers: extra named columns beyond the Gulf set
+MAX_NAMED_EXPORT = 8       # exporters: top destinations to name
+
+
+def _flow_table(conn, reporter: int, flow: str):
+    """Month x country table: months as rows, key partners as columns, plus Other,
+    Total and (importers) Gulf %. Returns the DataFrame, or None if no data."""
     rows = db.flow_matrix(conn, reporter, flow)
     if not rows:
-        return None, {}
-    df = pd.DataFrame([(countries.name(r["partner_code"]), r["partner_code"],
-                        r["period"][:4] + "-" + r["period"][4:], r["kt"]) for r in rows],
-                      columns=["partner", "code", "month", "kt"])
-    piv = df.pivot_table(index=["partner", "code"], columns="month", values="kt",
-                         aggfunc="sum", fill_value=0.0)
-    # Gulf share per month (importers only meaningful, computed regardless)
-    gulf = {m: 0.0 for m in piv.columns}
-    tot = {m: 0.0 for m in piv.columns}
-    for (partner, code), row in piv.iterrows():
-        for m in piv.columns:
-            tot[m] += row[m]
-            if code in countries.GULF:
-                gulf[m] += row[m]
-    gulf_pct = {m: (100 * gulf[m] / tot[m] if tot[m] else 0.0) for m in piv.columns}
-    # order rows: Gulf first, then by total volume
-    piv["_total"] = piv.sum(axis=1)
-    piv["_gulf"] = [1 if c in countries.GULF else 0 for _, c in piv.index]
-    piv = piv.sort_values(["_gulf", "_total"], ascending=[False, False]).drop(
-        columns=["_total", "_gulf"])
-    piv.index = [f"{'🛢 ' if c in countries.GULF else ''}{p}" for p, c in piv.index]
-    return piv, gulf_pct
+        return None
 
+    by_month: dict[str, dict[int, float]] = {}
+    totals: dict[int, float] = {}
+    for r in rows:
+        month = r["period"][:4] + "-" + r["period"][4:]
+        by_month.setdefault(month, {})[r["partner_code"]] = r["kt"]
+        totals[r["partner_code"]] = totals.get(r["partner_code"], 0.0) + (r["kt"] or 0)
 
-def _stacked_area(piv) -> go.Figure:
-    """Stacked-area partner mix over time; top 10 partners named, rest 'Other'."""
-    order = piv.sum(axis=1).sort_values(ascending=False)
-    top = list(order.index[:10])
-    fig = go.Figure()
-    for name in top:
-        fig.add_trace(go.Scatter(x=list(piv.columns), y=list(piv.loc[name]),
-                                 mode="lines", stackgroup="one", name=name.replace("🛢 ", "")))
-    other = piv.drop(index=top, errors="ignore")
-    if len(other):
-        fig.add_trace(go.Scatter(x=list(piv.columns), y=list(other.sum(axis=0)),
-                                 mode="lines", stackgroup="one", name="Other",
-                                 line=dict(color="#9aa0a6")))
-    fig.update_layout(height=320, margin=dict(t=10, b=30, l=10, r=10),
-                      legend=dict(font=dict(size=11)), plot_bgcolor="rgba(0,0,0,0)",
-                      paper_bgcolor="rgba(0,0,0,0)", yaxis_title="kt")
-    return fig
+    ranked = [c for c, _ in sorted(totals.items(), key=lambda kv: -kv[1]) if totals[c] > 0]
+    if flow == "M":
+        named = [c for c in GULF_ORDER if totals.get(c, 0) > 0]  # skip never-supplied Gulf
+        named += [c for c in ranked if c not in named][:MAX_NAMED_NON_GULF]
+    else:
+        named = ranked[:MAX_NAMED_EXPORT]
+
+    records = []
+    for month in sorted(by_month):
+        parts = by_month[month]
+        row = {"Month": month}
+        for code in named:
+            row[countries.name(code)] = parts.get(code)
+        other = sum(v for c, v in parts.items() if c not in named)
+        row["Other"] = other or None
+        total = sum(parts.values())
+        row["Total"] = round(total, 1)
+        if flow == "M":
+            gulf = sum(v for c, v in parts.items() if c in countries.GULF)
+            row["Gulf %"] = round(100 * gulf / total) if total else 0
+        records.append(row)
+    df = pd.DataFrame(records).set_index("Month")
+    # float dtype so missing months render as blank cells, not the string "None"
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    # drop partner columns that never shipped anything (all blank or all zero)
+    keep = [c for c in df.columns
+            if c in ("Other", "Total", "Gulf %") or df[c].fillna(0).abs().sum() > 0]
+    return df[keep]
 
 
 def _trade_flows_section(conn) -> None:
@@ -220,22 +224,23 @@ def _trade_flows_section(conn) -> None:
     tabs = st.tabs([c["name"] for c in countries.TRADE_COUNTRIES])
     for tab, c in zip(tabs, countries.TRADE_COUNTRIES):
         with tab:
-            piv, gulf_pct = _flow_frame(conn, c["reporter"], c["flow"])
-            if piv is None:
+            df = _flow_table(conn, c["reporter"], c["flow"])
+            if df is None:
                 st.caption("no data yet — run `tracker trade-flows`")
                 continue
-            flow_word = "imports · origins" if c["flow"] == "M" else "exports · destinations"
-            latest_m = piv.columns[-1]
-            total = piv[latest_m].sum()
+            latest = df.iloc[-1]
             cols = st.columns(3)
-            cols[0].metric(f"{c['name']} {c['flow']=='M' and 'imports' or 'exports'}",
-                           f"{total:.0f} kt", help=f"latest month {latest_m}")
+            cols[0].metric(f"{c['name']} {'imports' if c['flow'] == 'M' else 'exports'}",
+                           f"{latest['Total']:.0f} kt",
+                           help=f"latest month {df.index[-1]}")
             if c["flow"] == "M":
-                cols[1].metric("Gulf share (latest)", f"{gulf_pct[latest_m]:.0f}%")
-            st.caption(f"{flow_word} — full partner × month matrix (kt)")
-            st.plotly_chart(_stacked_area(piv), use_container_width=True,
-                            key=f"flow_area_{c['reporter']}_{c['flow']}")
-            st.dataframe(piv.round(1), use_container_width=True)
+                cols[1].metric("Gulf share (latest)", f"{latest['Gulf %']:.0f}%")
+            st.caption("kt per month by "
+                       + ("origin" if c["flow"] == "M" else "destination")
+                       + " — blank = no recorded shipments that month")
+            st.dataframe(df, use_container_width=True,
+                         column_config={"Gulf %": st.column_config.NumberColumn(
+                             "Gulf %", format="%d%%")} if c["flow"] == "M" else None)
 
 
 main()
