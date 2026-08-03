@@ -42,10 +42,15 @@ def world_kt(payload: dict) -> float | None:
 
 
 def agg_rows(payload: dict) -> list[dict]:
-    """Comtrade repeats each partner once per mode-of-transport *plus* an all-modes
-    aggregate (motCode 0). Keep only the aggregate or every total double-counts."""
+    """Comtrade repeats each partner along several dimensions — mode of transport
+    (motCode), customs procedure (customsCode), and second partner (partner2Code) —
+    each with sub-splits *plus* a fully-aggregated row. Keep only the fully-aggregated
+    rows (all-modes 0, all-customs C00, no 2nd partner) or every total double-counts."""
     rows = payload.get("data") or []
-    agg = [r for r in rows if r.get("motCode") in (0, None)]
+    agg = [r for r in rows
+           if r.get("motCode") in (0, None)
+           and r.get("customsCode") in ("C00", None, "")
+           and r.get("partner2Code") in (0, None)]
     return agg or rows
 
 

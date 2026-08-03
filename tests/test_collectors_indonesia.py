@@ -31,6 +31,17 @@ def test_world_kt_dedupes_mode_of_transport():
     assert world_kt(payload) == 3.0        # not 6.0
 
 
+def test_world_kt_dedupes_customs_code():
+    """Partners also repeat by customsCode: C01+C06 sub-splits plus a C00 all-customs
+    aggregate. Only the C00 row must count."""
+    payload = {"data": [
+        {"partnerCode": 784, "motCode": 0, "partner2Code": 0, "customsCode": "C01", "netWgt": 105_000_000},
+        {"partnerCode": 784, "motCode": 0, "partner2Code": 0, "customsCode": "C06", "netWgt": 105_000_000},
+        {"partnerCode": 784, "motCode": 0, "partner2Code": 0, "customsCode": "C00", "netWgt": 210_000_000},
+    ]}
+    assert world_kt(payload) == 210.0        # C00 only, not 420
+
+
 def test_world_kt_prefers_all_modes_world_row():
     payload = {"data": [
         {"partnerCode": 0, "motCode": 2100, "netWgt": 300_000_000},
