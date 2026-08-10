@@ -38,14 +38,35 @@ MANUAL_METRICS = {"china_port_stocks_kt", "gulf_sulfur_transits_wk", "ksp_fob",
                   "adnoc_osp_fob", "tampa_sulfur_cfr"}
 
 
+def _break_gaps(df, gap_factor: float = 3.0):
+    """Insert a NaN row wherever the series skips a reporting period, so plotly breaks
+    the line instead of drawing a straight edge across missing months — a gap must look
+    like a gap, not like a smooth trend (e.g. China has no 2025 data at all)."""
+    if len(df) < 3:
+        return df
+    dates = pd.to_datetime(df["date"])
+    deltas = dates.diff().dt.days.dropna()
+    if deltas.empty:
+        return df
+    threshold = max(deltas.median() * gap_factor, 45)
+    rows = []
+    for i, (d, v) in enumerate(zip(df["date"], df["v"])):
+        if i and (dates.iloc[i] - dates.iloc[i - 1]).days > threshold:
+            mid = dates.iloc[i - 1] + (dates.iloc[i] - dates.iloc[i - 1]) / 2
+            rows.append({"date": mid.strftime("%Y-%m-%d"), "v": float("nan")})
+        rows.append({"date": d, "v": v})
+    return pd.DataFrame(rows)
+
+
 def trend_chart(conn, metric: str, unit: str) -> go.Figure | None:
     rows = db.history(conn, metric)
     if not rows or len(rows) < 2:
         return None
     df = pd.DataFrame([(r["ts"][:10], r["value"]) for r in rows], columns=["date", "v"])
     df = df.groupby("date", as_index=False)["v"].mean().sort_values("date")
+    df = _break_gaps(df)
     fig = go.Figure(go.Scatter(
-        x=df["date"], y=df["v"], mode="lines+markers",
+        x=df["date"], y=df["v"], mode="lines+markers", connectgaps=False,
         line=dict(width=2, color="#4c8bf5"), marker=dict(size=4),
         hovertemplate="%{x}<br>%{y:.1f} " + unit + "<extra></extra>"))
     fig.update_layout(height=170, margin=dict(t=8, b=24, l=8, r=8),
