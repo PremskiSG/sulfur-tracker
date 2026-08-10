@@ -122,6 +122,7 @@ def spec_for(metric: str) -> MetricSpec | None:
 
 # Tracked prices shown/charted on the dashboard but NOT scored into the composite.
 REFERENCE_METRICS: dict[str, tuple[str, str]] = {
+    "china_sulfur_imports_kt": ("China sulfur imports (SMM / customs)", "kt(mo)"),
     "fred_acid_ppi": ("US sulfuric-acid price index (FRED)", "index"),
 }
 
@@ -177,6 +178,13 @@ SIGNAL_DOC: dict[str, tuple[str, str]] = {
         "Same idea as Kuwait's price, from a **different** big Gulf seller. One seller "
         "raising prices could be a fluke; **Kuwait and the UAE both** hiking at the same "
         "time is strong, independent proof the shortage is real and widespread."),
+    "china_sulfur_imports_kt": (
+        "How much sulfur China imports each month (Chinese customs, via SMM).",
+        "China is the **world's biggest sulfur buyer**, so this is the single most "
+        "important demand number there is — and UN Comtrade stopped carrying it after "
+        "2024, which is why we read it from SMM's customs write-ups instead. It is "
+        "collapsing: **−85% year-on-year in June 2026**. When the largest buyer simply "
+        "cannot get cargoes, that is the shortage in its purest form."),
     "fred_acid_ppi": (
         "US government price index for sulfuric acid (FRED, monthly since 1987).",
         "Sulfuric acid is sulfur's **main product** — burn sulfur, get acid, which "
