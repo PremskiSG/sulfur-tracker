@@ -123,6 +123,7 @@ def spec_for(metric: str) -> MetricSpec | None:
 # Tracked prices shown/charted on the dashboard but NOT scored into the composite.
 REFERENCE_METRICS: dict[str, tuple[str, str]] = {
     "china_sulfur_imports_kt": ("China sulfur imports (SMM / customs)", "kt(mo)"),
+    "china_acid_exports_kt": ("China sulfuric-acid exports (SMM / customs)", "kt(mo)"),
     "fred_acid_ppi": ("US sulfuric-acid price index (FRED)", "index"),
 }
 
@@ -185,6 +186,15 @@ SIGNAL_DOC: dict[str, tuple[str, str]] = {
         "2024, which is why we read it from SMM's customs write-ups instead. It is "
         "collapsing: **−85% year-on-year in June 2026**. When the largest buyer simply "
         "cannot get cargoes, that is the shortage in its purest form."),
+    "china_acid_exports_kt": (
+        "How much sulfuric acid China ships abroad each month (customs, via SMM).",
+        "Sulfuric acid is what sulfur gets **turned into** — and China makes over 40% of "
+        "the world's supply, much of it as a free byproduct of its copper and zinc "
+        "smelters. On 1 May 2026 China **banned acid exports** to protect its own "
+        "fertilizer industry, and shipments fell off a cliff: **~980 tonnes in June, "
+        "−99.7% year-on-year**. Note this is acid, not sulfur — it does not refill a "
+        "sulfur shortage (you cannot turn acid back into sulfur), but shutting it off "
+        "makes every acid buyer outside China scramble."),
     "fred_acid_ppi": (
         "US government price index for sulfuric acid (FRED, monthly since 1987).",
         "Sulfuric acid is sulfur's **main product** — burn sulfur, get acid, which "

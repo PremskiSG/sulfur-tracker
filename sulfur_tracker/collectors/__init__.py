@@ -37,6 +37,7 @@ MANUAL_INPUTS: dict[str, tuple[str, str, str]] = {
     "tampa_sulfur": ("tampa_sulfur_cfr", "USD/lt", "manual"),
     # China customs imports, read from SMM write-ups (Comtrade dropped China after 2024)
     "china_imports": ("china_sulfur_imports_kt", "kt(mo)", "manual"),
+    "china_acid_exports": ("china_acid_exports_kt", "kt(mo)", "manual"),
     # For keying in historical China spot prices from SunSirs/TradingEconomics, e.g.
     #   tracker input sulfur_price 3860 --date 2025-11-14
     "sulfur_price": ("sulfur_price_cn", "CNY/t", "manual"),
