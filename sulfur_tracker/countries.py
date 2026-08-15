@@ -17,7 +17,7 @@ M49: dict[int, str] = {
     862: "Venezuela", 218: "Ecuador", 214: "Dominican Rep.", 340: "Honduras",
     192: "Cuba", 558: "Nicaragua", 320: "Guatemala", 600: "Paraguay", 858: "Uruguay",
     710: "South Africa", 516: "Namibia", 834: "Tanzania", 24: "Angola", 818: "Egypt",
-    324: "Guinea", 466: "Mali", 686: "Senegal", 504: "Morocco",
+    324: "Guinea", 466: "Mali", 686: "Senegal", 504: "Morocco", 792: "Turkey",
     788: "Tunisia", 12: "Algeria", 800: "Uganda", 404: "Kenya", 231: "Ethiopia",
     540: "New Caledonia", 598: "Papua New Guinea", 36: "Australia", 554: "New Zealand",
     458: "Malaysia", 608: "Philippines", 704: "Vietnam", 764: "Thailand",
