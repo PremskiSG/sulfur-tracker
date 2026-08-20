@@ -22,6 +22,7 @@ M49: dict[int, str] = {
     540: "New Caledonia", 598: "Papua New Guinea", 36: "Australia", 554: "New Zealand",
     458: "Malaysia", 608: "Philippines", 704: "Vietnam", 764: "Thailand",
     702: "Singapore", 50: "Bangladesh", 586: "Pakistan", 144: "Sri Lanka",
+    490: "Other Asia (Taiwan)",
     0: "World",
 }
 
