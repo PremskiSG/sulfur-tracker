@@ -187,8 +187,14 @@ def main() -> None:
 # Gulf columns always shown (in this order) for importers, so the table reads the same
 # month to month even when a supplier drops to zero — that zero IS the signal.
 GULF_ORDER = [784, 682, 414, 48, 512, 634, 364, 368]
-MAX_NAMED_NON_GULF = 3     # importers: extra named columns beyond the Gulf set
+MAX_NAMED_NON_GULF = 3     # importers: extra named columns beyond the Gulf/watch set
 MAX_NAMED_EXPORT = 8       # exporters: top destinations to name
+MIN_COLUMN_KT = 10.0       # a partner must ship this much (cumulative) to earn a column;
+                           # below it they fold into Other rather than eating table width
+# Strategically interesting origins that get a column whenever they clear MIN_COLUMN_KT,
+# even if they miss the volume cut — Kazakhstan matters because any eastbound cargo is
+# evidence of the rail diversion that only pencils at crisis prices.
+WATCH_PARTNERS = [398]
 
 
 def _flow_table(conn, reporter: int, flow: str):
@@ -205,9 +211,12 @@ def _flow_table(conn, reporter: int, flow: str):
         by_month.setdefault(month, {})[r["partner_code"]] = r["kt"]
         totals[r["partner_code"]] = totals.get(r["partner_code"], 0.0) + (r["kt"] or 0)
 
-    ranked = [c for c, _ in sorted(totals.items(), key=lambda kv: -kv[1]) if totals[c] > 0]
+    ranked = [c for c, _ in sorted(totals.items(), key=lambda kv: -kv[1])
+              if totals[c] >= MIN_COLUMN_KT]
     if flow == "M":
-        named = [c for c in GULF_ORDER if totals.get(c, 0) > 0]  # skip never-supplied Gulf
+        named = [c for c in GULF_ORDER if totals.get(c, 0) >= MIN_COLUMN_KT]
+        named += [c for c in WATCH_PARTNERS
+                  if totals.get(c, 0) >= MIN_COLUMN_KT and c not in named]
         named += [c for c in ranked if c not in named][:MAX_NAMED_NON_GULF]
     else:
         named = ranked[:MAX_NAMED_EXPORT]
