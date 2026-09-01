@@ -33,6 +33,7 @@ class Confidence(str, Enum):
 # Functional groups (display order = upstream -> downstream along the chain) and their
 # base weights. Landed balance is the core, so it carries the highest base.
 GROUPS: dict[str, tuple[int, str, float]] = {
+    "supply_policy":  (0, "Supply policy (export bans)", 2.5),
     "gulf_supply":    (1, "Gulf supply", 2.5),
     "landed_balance": (2, "Landed sulfur balance", 3.0),
 }
@@ -66,6 +67,8 @@ class MetricSpec:
     unit: str
     cadence_days: int    # expected refresh interval; drives staleness flagging
     label: str
+    baseline_days: int | None = None   # override the global z-score window; slow policy
+                                       # variables need a longer memory than 90 days
 
     @property
     def group_label(self) -> str:
@@ -82,9 +85,9 @@ class MetricSpec:
 
 
 def _spec(metric, source, group, weight, reliability, higher_means, unit,
-          cadence_days, label):
+          cadence_days, label, baseline_days=None):
     return MetricSpec(metric, source, group, weight, reliability, higher_means.value,
-                      unit, cadence_days, label)
+                      unit, cadence_days, label, baseline_days)
 
 
 # The scored universe. Anything a collector emits that is NOT listed here is stored as a
@@ -92,6 +95,10 @@ def _spec(metric, source, group, weight, reliability, higher_means, unit,
 SIGNAL_SPEC: dict[str, MetricSpec] = {
     s.metric: s
     for s in [
+        # --- Supply policy (upstream of the strait: bans remove supply outright) ---
+        _spec("supply_under_restriction_pct", "restrictions", "supply_policy", 1.25,
+              "manual", Direction.TIGHTENING, "%", 30,
+              "World supply under export ban", baseline_days=365),
         # --- Gulf supply (upstream, most leading) ---
         _spec("gulf_sulfur_transits_wk", "ais_gulf_transits", "gulf_supply", 1.25,
               "manual", Direction.EASING, "vessels/wk", 7, "Gulf sulfur laden departures"),
@@ -122,6 +129,14 @@ def spec_for(metric: str) -> MetricSpec | None:
 
 # Tracked prices shown/charted on the dashboard but NOT scored into the composite.
 REFERENCE_METRICS: dict[str, tuple[str, str]] = {
+    "indonesia_mhp_output_kt_ni": ("Indonesia MHP output (nickel contained)", "kt Ni"),
+    "implied_sulfur_demand_kt": ("Implied HPAL sulfur demand", "kt(mo)"),
+    "hormuz_sulfur_transit_kt": ("Sulfur transiting Hormuz", "kt"),
+    "sulfur_cif_indonesia": ("Sulfur landed Indonesia (CIF)", "USD/t"),
+    "acid_cfr_indonesia": ("Sulfuric acid landed Indonesia (CFR)", "USD/t"),
+    "map_utilisation_pct": ("MAP fertilizer plant utilisation", "%"),
+    "dap_utilisation_pct": ("DAP fertilizer plant utilisation", "%"),
+    "sulfur_cost_share_pct": ("Sulfur as share of phosphate production cost", "%"),
     "china_sulfur_imports_kt": ("China sulfur imports (SMM / customs)", "kt(mo)"),
     "china_acid_exports_kt": ("China sulfuric-acid exports (SMM / customs)", "kt(mo)"),
     "fred_acid_ppi": ("US sulfuric-acid price index (FRED)", "index"),
@@ -179,6 +194,54 @@ SIGNAL_DOC: dict[str, tuple[str, str]] = {
         "Same idea as Kuwait's price, from a **different** big Gulf seller. One seller "
         "raising prices could be a fluke; **Kuwait and the UAE both** hiking at the same "
         "time is strong, independent proof the shortage is real and widespread."),
+    "supply_under_restriction_pct": (
+        "The share of world sulfur supply sitting under a government export ban.",
+        "Not all missing sulfur is stuck on a ship. In 2026 three producing countries "
+        "simply **banned exports outright** — Kazakhstan (27 Jun, 4.6 Mt/yr), Russia "
+        "(through Dec) and Turkey. That supply still exists; it just cannot legally "
+        "leave. This is the **policy layer above the strait**, and it can keep the "
+        "market tight long after Hormuz reopens — which is exactly what makes it worth "
+        "scoring separately from shipping flows."),
+    "indonesia_mhp_output_kt_ni": (
+        "How much half-finished nickel (MHP) Indonesia actually produced, in nickel tonnes.",
+        "This is **curtailment you can measure** instead of infer. HPAL plants burn "
+        "10-12 tonnes of sulfur per tonne of nickel, so when output falls the sulfur is "
+        "genuinely not being consumed. Output slid from **42.0 kt Ni in January to 29.9 "
+        "kt in June** — the shortage biting in the real economy, not just in prices."),
+    "implied_sulfur_demand_kt": (
+        "MHP output converted into the sulfur it must have consumed.",
+        "Multiply nickel output by ~11 t of sulfur per tonne and you get the sulfur that "
+        "Indonesia's HPAL plants actually burned. It turns a nickel number into a "
+        "**demand number**, directly comparable with the import volumes we track."),
+    "hormuz_sulfur_transit_kt": (
+        "Tonnes of sulfur physically passing through the Strait of Hormuz.",
+        "The most direct measure of the blockage there is: **~80 kt moved during the "
+        "whole 3.5-month conflict, versus ~640 kt in the fortnight after the truce**. "
+        "Our vessel-counting signal never had a data source; this one does."),
+    "sulfur_cif_indonesia": (
+        "What a tonne of sulfur costs delivered to Indonesia, freight included.",
+        "Gulf sellers quote **fob** — price at their own dock. Buyers pay **CIF**: fob "
+        "plus freight, which blew out to $140-145/t. CIF went from **$563 to "
+        "$1,250-1,300** at the peak, so it captures pain that the fob prices hide."),
+    "acid_cfr_indonesia": (
+        "What sulfuric acid costs delivered to Indonesia.",
+        "When sulfur is unobtainable, HPAL plants buy finished **acid** instead — at a "
+        "price that went from **$150 to $410-445/t**. Rising acid CFR alongside rising "
+        "sulfur CIF means buyers are paying up on both routes at once."),
+    "map_utilisation_pct": (
+        "How hard MAP fertilizer plants are running, as a % of capacity.",
+        "Fertilizer is the biggest sulfur consumer, so idle plants are the clearest sign "
+        "of **demand destruction** — buyers priced out rather than supplied. MAP fell to "
+        "~40% of capacity."),
+    "dap_utilisation_pct": (
+        "How hard DAP fertilizer plants are running, as a % of capacity.",
+        "The companion to MAP, and it fell further — to **~30%**. Two-thirds of the "
+        "capacity standing still is demand that has simply stopped buying sulfur."),
+    "sulfur_cost_share_pct": (
+        "Sulfur's share of the cost of making phosphate fertilizer.",
+        "Normally sulfur is **30-35%** of production cost. In this crisis it passed "
+        "**130%** — the raw material costs more than the finished product sells for. "
+        "That single number explains why plants idled: not scarcity, but arithmetic."),
     "china_sulfur_imports_kt": (
         "How much sulfur China imports each month (Chinese customs, via SMM).",
         "China is the **world's biggest sulfur buyer**, so this is the single most "

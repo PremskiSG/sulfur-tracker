@@ -163,6 +163,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "backfill":
         n = seeds.backfill(conn, force=args.force)
         print(f"  backfill: {n} seed datapoints inserted")
+        from sulfur_tracker import restrictions
+        measures, points = restrictions.refresh(conn)
+        print(f"  restrictions: {measures} measures, {points} monthly points")
         return 0
     if args.cmd == "history":
         print(f"  fetching {args.months} months of history (Comtrade is slow)...")

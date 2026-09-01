@@ -175,6 +175,8 @@ def main() -> None:
                             f"stale {s.staleness_days}d{' ⚠' if s.stale else ''}")
             _signal_row(conn, spec.label, s.value if s else None, spec.unit,
                         sub_html, metric)
+        if gkey == "supply_policy":
+            _restrictions_table(conn)
 
     st.subheader("Reference (not scored)")
     for metric, (label, unit) in REFERENCE_METRICS.items():
@@ -255,6 +257,30 @@ def _display_frame(df):
             out[col] = out[col].map(lambda v: "" if pd.isna(v) else f"{v:,.1f}")
     return out
 
+
+
+def _restrictions_table(conn) -> None:
+    """The export-ban register behind the supply-policy score: which producers have
+    legally shut their exports, and how much tonnage each measure covers."""
+    rows = db.restrictions(conn)
+    if not rows:
+        return
+    from sulfur_tracker.restrictions import GLOBAL_SULFUR_KT_YR
+    recs = []
+    for r in rows:
+        recs.append({
+            "Country": countries.name(r["country_code"]),
+            "Measure": r["measure"].replace("_", " "),
+            "Commodity": r["commodity"],
+            "In force from": r["start_date"],
+            "Until": r["end_date"] or "open-ended",
+            "Covers (kt/yr)": f"{r['annual_kt']:,.0f}" if r["annual_kt"] else "",
+            "Source": r["source"] or "",
+        })
+    st.caption(f"Export-restriction register — sulfur measures are scored above as a "
+               f"share of ~{GLOBAL_SULFUR_KT_YR/1000:.0f} Mt/yr world supply; acid "
+               f"measures are listed for context but excluded from that maths.")
+    st.table(pd.DataFrame(recs).set_index("Country"))
 
 def _trade_flows_section(conn) -> None:
     st.divider()

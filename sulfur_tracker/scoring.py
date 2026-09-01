@@ -26,6 +26,10 @@ DEFAULTS = {
     },
     "contamination": {
         "news_window_days": 21,
+        "mhp_window_days": 90,      # MHP is monthly and publishes ~6 weeks late, so the
+                                    # freshest reading is always ~2 months old; 90d keeps
+                                    # the measured path usable instead of always falling back
+        "mhp_decline_pct": 15.0,    # drop from trailing max that counts as curtailment
         "curtailment_keywords": ["curtailment", "care and maintenance",
                                  "suspend", "output cut", "force majeure"],
     },
@@ -98,7 +102,7 @@ def _zone(composite: float, zones: dict) -> str:
 
 
 def _score_metric(conn, spec: MetricSpec, cfg: dict) -> SignalScore:
-    rows = db.history(conn, spec.metric, days=cfg["baseline_days"])
+    rows = db.history(conn, spec.metric, days=spec.baseline_days or cfg["baseline_days"])
     latest = db.latest_signal(conn, spec.metric)
     if not rows or latest is None:
         return SignalScore(spec.metric, spec.label, spec.group, spec.weight, None,
@@ -145,6 +149,18 @@ def _contamination_check(conn, signals: list[SignalScore], cfg: dict) -> str | N
     if not imports_falling:
         return None
     cc = cfg["contamination"]
+
+    # Prefer measured curtailment: Indonesian MHP output is the physical read on whether
+    # HPAL plants actually cut, which is what the news keywords were only guessing at.
+    measured = _mhp_decline(conn, cc)
+    if measured is not None:
+        if measured >= cc["mhp_decline_pct"]:
+            return ("Curtailments confirmed: Indonesian MHP output is down %.0f%% from "
+                    "its recent peak while sulfur imports fall -- the shortage is now "
+                    "cutting real production, not just inventory." % measured)
+        return None      # output holding up -> genuine drawdown phase, no flag needed
+
+    # Fall back to the news-keyword rule when MHP data is missing or stale.
     hits = 0
     for kw in cc["curtailment_keywords"]:
         hits += db.news_with_keyword(conn, kw, cc["news_window_days"])
@@ -153,6 +169,23 @@ def _contamination_check(conn, signals: list[SignalScore], cfg: dict) -> str | N
                 "curtailment news in the last %d days -- curtailments expected in "
                 "30-60 days." % cc["news_window_days"])
     return None
+
+
+def _mhp_decline(conn, cc: dict) -> float | None:
+    """Percent decline of Indonesian MHP output from its trailing max, or None when the
+    data is absent or older than mhp_window_days (in which case the caller falls back)."""
+    rows = db.history(conn, "indonesia_mhp_output_kt_ni")
+    values = [r["value"] for r in rows if r["value"]]
+    if len(values) < 2:
+        return None
+    latest = rows[-1]
+    from sulfur_tracker.collectors.base import staleness_days
+    if staleness_days(latest["ts"][:10]) > cc["mhp_window_days"]:
+        return None
+    peak = max(values)
+    if peak <= 0:
+        return None
+    return 100.0 * (peak - values[-1]) / peak
 
 
 def score(conn) -> ScoreResult:

@@ -75,6 +75,32 @@ quotas): if imports are falling *and* there is no curtailment news, the tracker 
 *"inventory drawdown phase — curtailments expected in 30–60 days."* Falling imports +
 curtailment news = sulfur-driven; output cut + rising imports = policy, not sulfur.
 
+## Supply-policy layer (export bans)
+
+Not all missing sulfur is stuck on a ship. Kazakhstan (Order No. 1363, 27 Jun 2026,
+4.6 Mt/yr), Russia (to 31 Dec 2026) and Turkey banned **exports outright**, and China
+banned **sulfuric-acid** exports. `supply_under_restriction_pct` scores the share of
+~84 Mt/yr world supply under a sulfur ban; the register behind it is in
+`sulfur_tracker/restrictions.py` and rendered as a table on the dashboard. Because each
+measure has a known start date the series is computed **retroactively**, so it carries
+real history. Acid measures are listed for context but excluded from the sulfur maths —
+acid cannot backfill a sulfur deficit (you can burn sulfur into acid, not the reverse).
+
+Refresh with `tracker backfill` (re-runnable; edit `KNOWN_RESTRICTIONS` as measures
+change).
+
+## Manual lookup sources
+
+Several signals have no free automated feed and are entered with `tracker input`:
+
+| Signal | Where to read it |
+|---|---|
+| China port stocks | SMM / SunSirs weekly reviews (both JS-walled — read in a browser, then key in; Chinese sources quote 万吨 = ×10 for kt) |
+| Kuwait KSP · Adnoc OSP | Argus headlines, monthly |
+| Tampa contract | Argus / Mosaic filings, quarterly |
+| China imports & acid exports | SMM customs write-ups (Comtrade dropped China after 2024) |
+| MHP output, CIF/CFR prices, MAP/DAP utilisation | SunSirs / SMM market reviews |
+
 ## Signals
 
 | Signal | Tier | Cadence | Source (free) | Lag vs strait event | Main failure modes | Best paid upgrade |

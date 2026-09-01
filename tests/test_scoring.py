@@ -52,3 +52,33 @@ def test_contamination_cleared_by_curtailment_news(conn):
                    "http://x", "tightening", "curtailment")
     r = score(conn)
     assert r.contamination_flag is None
+
+
+def _falling_imports(conn):
+    """Indonesia imports falling -> the precondition for the contamination check."""
+    _insert_series(conn, "indonesia_sulfur_imports_kt", [966, 966, 700])
+
+
+def test_measured_mhp_decline_reports_confirmed_curtailment(conn, monkeypatch):
+    import sulfur_tracker.scoring as sc
+    _falling_imports(conn)
+    rid = db.start_run(conn, "collect")
+    for val, ts in [(42.0, "2026-07-01"), (29.9, "2026-07-05")]:
+        db.insert_signal(conn, rid, Signal("t", "indonesia_mhp_output_kt_ni", val,
+                                           "kt Ni", ts))
+    monkeypatch.setattr(sc, "_mhp_decline", lambda conn, cc: 28.8)
+    r = score(conn)
+    assert r.contamination_flag is not None
+    assert "curtailments confirmed" in r.contamination_flag.lower()
+
+
+def test_stale_mhp_falls_back_to_news_rule(conn):
+    """An MHP point far in the past must not be trusted; the keyword rule takes over."""
+    _falling_imports(conn)
+    rid = db.start_run(conn, "collect")
+    for val, ts in [(42.0, "2020-01-31"), (29.9, "2020-06-30")]:
+        db.insert_signal(conn, rid, Signal("t", "indonesia_mhp_output_kt_ni", val,
+                                           "kt Ni", ts))
+    r = score(conn)
+    assert r.contamination_flag is not None
+    assert "inventory drawdown" in r.contamination_flag.lower()

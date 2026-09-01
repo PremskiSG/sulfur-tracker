@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS news_items (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Export restrictions / bans (the policy layer that removes supply independently of
+-- the strait). Upserted, not append-only: a measure's dates are amended, not re-logged.
+CREATE TABLE IF NOT EXISTS supply_restrictions (
+  country_code INTEGER NOT NULL,
+  measure TEXT NOT NULL,                   -- export_ban | export_quota | acid_export_ban
+  commodity TEXT NOT NULL DEFAULT 'sulfur',-- sulfur | acid  (acid excluded from S maths)
+  start_date TEXT NOT NULL,
+  end_date TEXT,                           -- NULL = still in force
+  annual_kt REAL,                          -- tonnage the measure covers, kt/yr
+  source TEXT,
+  note TEXT,
+  PRIMARY KEY (country_code, measure, start_date)
+);
+
 -- Bilateral sulfur trade matrix (browse-only, NOT a scored signal). Unlike signals this
 -- is a fixed historical matrix, so rows are upserted (a month's breakdown never changes).
 CREATE TABLE IF NOT EXISTS trade_flows (
@@ -199,3 +213,37 @@ def flow_periods(conn, reporter: int, flow: str) -> list[str]:
 
 def flow_count(conn) -> int:
     return int(conn.execute("SELECT COUNT(*) c FROM trade_flows").fetchone()["c"])
+
+
+# --- supply_restrictions (export bans / policy layer) ---
+
+def upsert_restriction(conn, country_code: int, measure: str, start_date: str,
+                       end_date: str | None = None, annual_kt: float | None = None,
+                       commodity: str = "sulfur", source: str = "", note: str = "") -> None:
+    conn.execute(
+        "INSERT INTO supply_restrictions (country_code, measure, commodity, start_date,"
+        " end_date, annual_kt, source, note) VALUES (?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(country_code, measure, start_date) DO UPDATE SET "
+        "end_date=excluded.end_date, annual_kt=excluded.annual_kt, "
+        "commodity=excluded.commodity, source=excluded.source, note=excluded.note",
+        (country_code, measure, commodity, start_date, end_date, annual_kt, source, note),
+    )
+
+
+def restrictions(conn, commodity: str | None = None) -> list[sqlite3.Row]:
+    if commodity:
+        return conn.execute(
+            "SELECT * FROM supply_restrictions WHERE commodity=? ORDER BY start_date",
+            (commodity,)).fetchall()
+    return conn.execute(
+        "SELECT * FROM supply_restrictions ORDER BY start_date").fetchall()
+
+
+def restricted_kt_on(conn, on_date: str, commodity: str = "sulfur") -> float:
+    """Annual tonnage under restriction on a given date. A measure counts from its
+    start_date up to and including its end_date (NULL end = still in force)."""
+    rows = conn.execute(
+        "SELECT COALESCE(SUM(annual_kt),0) kt FROM supply_restrictions "
+        "WHERE commodity=? AND start_date<=? AND (end_date IS NULL OR end_date>=?)",
+        (commodity, on_date, on_date)).fetchone()
+    return float(rows["kt"] or 0.0)

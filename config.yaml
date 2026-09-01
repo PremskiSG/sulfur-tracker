@@ -4,6 +4,9 @@
 
 headline_cadence_days: 14        # `tracker run` cadence (cron every 2 weeks)
 
+# HPAL sulfur intensity: tonnes of sulfur burned per tonne of contained nickel (10-12).
+sulfur_per_nickel_t: 11.0
+
 fx:
   usd_cny: 7.15                  # fallback USDCNY for USD-equivalent display (live via yfinance)
 
