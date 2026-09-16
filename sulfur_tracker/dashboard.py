@@ -206,10 +206,13 @@ def _flow_table(conn, reporter: int, flow: str):
     if not rows:
         return None
 
+    srcs = db.flow_sources(conn, reporter, flow)
     by_month: dict[str, dict[int, float]] = {}
     totals: dict[int, float] = {}
     for r in rows:
         month = r["period"][:4] + "-" + r["period"][4:]
+        if srcs.get(r["period"], "comtrade") != "comtrade":
+            month += " *"        # sourced from national customs, not Comtrade
         by_month.setdefault(month, {})[r["partner_code"]] = r["kt"]
         totals[r["partner_code"]] = totals.get(r["partner_code"], 0.0) + (r["kt"] or 0)
 
@@ -287,7 +290,9 @@ def _trade_flows_section(conn) -> None:
     st.subheader("Trade flows (Comtrade)")
     st.caption("Who sells sulfur to whom, by month (HS 2503). Importer partner = origin; "
                "exporter partner = destination. Mirror-derived, monthly, ~2-month lag — a "
-               "missing month is non-reporting, not zero. Browse-only, not scored.")
+               "missing month is non-reporting, not zero. Browse-only, not scored. "
+               "A month marked * comes from that country's own customs release (via SMM) "
+               "rather than Comtrade, which still lags.")
     tabs = st.tabs([c["name"] for c in countries.TRADE_COUNTRIES])
     for tab, c in zip(tabs, countries.TRADE_COUNTRIES):
         with tab:

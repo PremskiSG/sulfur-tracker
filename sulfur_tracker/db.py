@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS trade_flows (
   partner_code INTEGER NOT NULL,           -- M49 code of the origin/destination
   period TEXT NOT NULL,                    -- YYYYMM
   kt REAL,
+  source TEXT NOT NULL DEFAULT 'comtrade', -- 'comtrade', or a national-customs writeup
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (reporter, flow, partner_code, period)
 );
@@ -83,8 +84,18 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(DDL)
+    _migrate(conn)
     conn.commit()
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns that postdate a DB's creation. CREATE TABLE IF NOT EXISTS leaves an
+    existing table untouched, so new columns have to be added explicitly."""
+    cols = {c[1] for c in conn.execute("PRAGMA table_info(trade_flows)")}
+    if "source" not in cols:
+        conn.execute("ALTER TABLE trade_flows ADD COLUMN source TEXT NOT NULL "
+                     "DEFAULT 'comtrade'")
 
 
 def start_run(conn: sqlite3.Connection, kind: str = "headline") -> int:
@@ -185,14 +196,24 @@ def latest_run(conn) -> sqlite3.Row | None:
 # --- trade_flows (browse-only bilateral matrix) ---
 
 def upsert_flow(conn, reporter: int, flow: str, partner_code: int, period: str,
-                kt: float) -> None:
+                kt: float, source: str = "comtrade") -> None:
     conn.execute(
-        "INSERT INTO trade_flows (reporter, flow, partner_code, period, kt, updated_at) "
-        "VALUES (?,?,?,?,?, datetime('now')) "
+        "INSERT INTO trade_flows "
+        "(reporter, flow, partner_code, period, kt, source, updated_at) "
+        "VALUES (?,?,?,?,?,?, datetime('now')) "
         "ON CONFLICT(reporter, flow, partner_code, period) "
-        "DO UPDATE SET kt=excluded.kt, updated_at=datetime('now')",
-        (reporter, flow, partner_code, period, kt),
+        "DO UPDATE SET kt=excluded.kt, source=excluded.source, "
+        "updated_at=datetime('now')",
+        (reporter, flow, partner_code, period, kt, source),
     )
+
+
+def flow_sources(conn, reporter: int, flow: str) -> dict[str, str]:
+    """period -> source, so the dashboard can mark months that did not come from
+    Comtrade (a national customs writeup fills the gap while Comtrade lags)."""
+    return {r["period"]: r["source"] for r in conn.execute(
+        "SELECT period, MIN(source) AS source FROM trade_flows "
+        "WHERE reporter=? AND flow=? GROUP BY period", (reporter, flow))}
 
 
 def flow_matrix(conn, reporter: int, flow: str) -> list[sqlite3.Row]:

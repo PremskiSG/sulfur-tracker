@@ -38,6 +38,23 @@ def test_trade_flow_upsert_is_idempotent(conn):
     assert rows[0]["kt"] == 111.5
 
 
+def test_flow_source_defaults_to_comtrade_and_is_reported(conn):
+    """A month filled from a national customs release must not read as Comtrade."""
+    db.upsert_flow(conn, 360, "M", 784, "202606", 109.3)
+    db.upsert_flow(conn, 360, "M", 784, "202607", 256.8, source="smm")
+    conn.commit()
+    assert db.flow_sources(conn, 360, "M") == {"202606": "comtrade", "202607": "smm"}
+
+
+def test_flow_upsert_updates_source(conn):
+    """When Comtrade finally files a month, it overwrites the stand-in and its label."""
+    db.upsert_flow(conn, 360, "M", 784, "202607", 256.8, source="smm")
+    db.upsert_flow(conn, 360, "M", 784, "202607", 255.0)
+    conn.commit()
+    assert db.flow_sources(conn, 360, "M") == {"202607": "comtrade"}
+    assert db.flow_matrix(conn, 360, "M")[0]["kt"] == 255.0
+
+
 def test_flow_matrix_and_periods(conn):
     for partner, period, kt in [(784, "202602", 35.1), (784, "202603", 110.0),
                                 (682, "202603", 95.4)]:
