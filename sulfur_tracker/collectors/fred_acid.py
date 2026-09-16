@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import time
 
 from sulfur_tracker.collectors.base import (BaseCollector, CollectResult, http_get,
                                             staleness_days)
@@ -54,9 +55,19 @@ def fetch_observations(series: str = SERIES, cfg: dict | None = None) -> list[tu
             except (ValueError, KeyError):
                 continue
         return out
-    # No key -> public CSV download.
-    resp = http_get(cfg.get("csv", CSV), params={"id": series}, min_interval=1.0)
-    return parse_csv(resp.text, series)
+    # No key -> public CSV download. fredgraph.csv intermittently accepts the connection
+    # and then never responds (independent of headers), so a single read timeout is not
+    # evidence the series is gone -- retry before giving up.
+    last: Exception | None = None
+    for attempt in range(3):
+        try:
+            resp = http_get(cfg.get("csv", CSV), params={"id": series},
+                            min_interval=1.0, timeout=10)
+            return parse_csv(resp.text, series)
+        except Exception as exc:          # noqa: BLE001 - any transport error retries
+            last = exc
+            time.sleep(2 * (attempt + 1))
+    raise last  # type: ignore[misc]
 
 
 class FredAcid(BaseCollector):
