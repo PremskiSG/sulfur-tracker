@@ -14,7 +14,11 @@ from datetime import datetime
 
 _HEADLINE = re.compile(
     r"([A-Za-z]+)\s+(rose|fell|increased|decreased|traded|was|climbed|dropped|"
-    r"jumped|declined)\s+(?:to|around|at)\s+\$?([\d,]+(?:\.\d+)?)\s*"
+    r"jumped|declined)"
+    # TE slips a modifier between verb and preposition on unchanged days:
+    # "Sulfur traded flat at 7,719 CNY/T on September 25, 2026".
+    r"(?:\s+(?:flat|steady|unchanged|higher|lower|little\s+changed))?"
+    r"\s+(?:to|around|at)\s+\$?([\d,]+(?:\.\d+)?)\s*"
     r"([A-Z]{3})/(?:T|MT|Tonne)\s+on\s+([A-Z][a-z]+\s+\d{1,2},\s+\d{4})",
     re.IGNORECASE,
 )
