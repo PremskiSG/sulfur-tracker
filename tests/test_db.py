@@ -71,3 +71,21 @@ def test_latest_signal(conn):
     db.insert_signal(conn, rid, _sig("m", 1.0, "2026-07-01"))
     db.insert_signal(conn, rid, _sig("m", 9.0, "2026-07-05"))
     assert db.latest_signal(conn, "m")["value"] == 9.0
+
+
+def test_identical_observation_is_not_stored_twice(conn):
+    """Re-collecting an unchanged upstream print must not double-count the day."""
+    s = Signal("te", "sulfur_price_cn", 7719.0, "CNY/t", "2026-09-25")
+    first = db.insert_signal(conn, None, s)
+    again = db.insert_signal(conn, None, s)
+    assert again == first
+    assert len(db.history(conn, "sulfur_price_cn")) == 1
+
+
+def test_revised_value_for_same_date_is_appended(conn):
+    """A corrected value for the same date is real new information, so it is kept."""
+    db.insert_signal(conn, None, Signal("te", "sulfur_price_cn", 7719.0, "CNY/t",
+                                        "2026-09-25"))
+    db.insert_signal(conn, None, Signal("te", "sulfur_price_cn", 7700.0, "CNY/t",
+                                        "2026-09-25"))
+    assert [r["value"] for r in db.history(conn, "sulfur_price_cn")] == [7719.0, 7700.0]

@@ -115,6 +115,17 @@ def finish_run(conn, run_id, composite=None, zone=None, coverage_pct=None,
 
 
 def insert_signal(conn, run_id: int | None, sig: Signal) -> int:
+    """Append one observation. Re-collecting while the upstream print is unchanged
+    would otherwise store the same (metric, ts, value) again and let one day's value
+    count several times in the trailing z-score, so an exact repeat is skipped. A
+    *revised* value for the same date is still appended -- history is never rewritten."""
+    dup = conn.execute(
+        "SELECT id FROM signals WHERE metric=? AND substr(ts,1,10)=substr(?,1,10) "
+        "AND value IS ? ORDER BY id DESC LIMIT 1",
+        (sig.metric, sig.timestamp, sig.value),
+    ).fetchone()
+    if dup is not None:
+        return int(dup["id"])
     cur = conn.execute(
         "INSERT INTO signals (run_id, source, metric, value, unit, ts, "
         "direction_vs_baseline, confidence, staleness_days) "
