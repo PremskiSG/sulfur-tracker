@@ -1,7 +1,9 @@
 import json
+from datetime import date
 
 from sulfur_tracker import db, history
 from sulfur_tracker.seeds import backfill
+from sulfur_tracker.collectors.indonesia_imports import _shift_month
 
 
 def _write(tmp_path, data, unit="CNY/T"):
@@ -32,3 +34,25 @@ def test_import_supersedes_placeholder_seeds(conn, tmp_path):
     srcs = {r["source"] for r in conn.execute(
         "SELECT DISTINCT source FROM signals WHERE metric='sulfur_price_cn'").fetchall()}
     assert "seed" not in srcs and "te_history" in srcs
+
+
+def test_comtrade_replaces_customs_remainder_for_same_month(conn, monkeypatch):
+    year, month = _shift_month(date.today().year, date.today().month, -2)
+    period = f"{year}{month:02d}"
+    db.upsert_flow(conn, 360, "M", 784, period, 100.0, source="smm")
+    db.upsert_flow(conn, 360, "M", 899, period, 21.0, source="smm")
+    conn.commit()
+
+    def fetched(reporter, flow, fetched_period):
+        if reporter == 360 and flow == "M" and fetched_period == period:
+            return {784: 100.0, 124: 50.0}
+        return {}
+
+    monkeypatch.setattr("sulfur_tracker.collectors.comtrade_flows.fetch_flows", fetched)
+    history.backfill_trade_flows(conn, months=1, lag=2)
+    rows = conn.execute(
+        "SELECT partner_code, source FROM trade_flows WHERE reporter=360 "
+        "AND flow='M' AND period=? ORDER BY partner_code", (period,),
+    ).fetchall()
+    assert [(r["partner_code"], r["source"]) for r in rows] == [
+        (124, "comtrade"), (784, "comtrade")]

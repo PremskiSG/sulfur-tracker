@@ -157,6 +157,15 @@ def backfill_trade_flows(conn, months: int = 18, lag: int = 2) -> dict[str, int]
             except Exception as exc:  # noqa: BLE001
                 log.warning("flows %s %s failed: %s", c["name"], period, exc)
                 continue
+            if flows:
+                # A customs headline may have supplied an "Other" remainder while
+                # Comtrade lagged. Once the partner breakdown arrives, that estimate
+                # must not be added on top of the official rows.
+                conn.execute(
+                    "DELETE FROM trade_flows WHERE reporter=? AND flow=? "
+                    "AND period=? AND source!='comtrade'",
+                    (c["reporter"], c["flow"], period),
+                )
             for partner, kt in flows.items():
                 db.upsert_flow(conn, c["reporter"], c["flow"], partner, period, kt)
                 written += 1
