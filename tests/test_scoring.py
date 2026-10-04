@@ -37,6 +37,15 @@ def test_coverage_is_zero_when_empty(conn):
     assert not r.available_signals
 
 
+def test_staleness_is_recalculated_from_observation_date(conn):
+    rid = db.start_run(conn, "collect")
+    db.insert_signal(conn, rid, Signal("t", "sulfur_price_cn", 100.0,
+                                       "CNY/t", "2020-01-01", staleness_days=0))
+    price = next(s for s in score(conn).signals if s.metric == "sulfur_price_cn")
+    assert price.staleness_days > 3
+    assert price.stale
+
+
 def test_contamination_flag_when_imports_fall_without_curtailment_news(conn):
     _insert_series(conn, "indonesia_sulfur_imports_kt", [966, 966, 700])
     r = score(conn)

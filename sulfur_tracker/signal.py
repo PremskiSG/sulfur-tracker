@@ -153,14 +153,16 @@ SIGNAL_DOC: dict[str, tuple[str, str]] = {
         "a delivery is late. But if the shelves are emptying *and* ships from the Gulf "
         "aren't showing up, factories start to worry — and that worry becomes panic-buying "
         "and price spikes weeks before anyone officially runs out. Watching the pantry "
-        "level is the earliest honest read on whether there's really enough to go around."),
+        "level is the earliest honest read on whether there's really enough to go around. "
+        "Reports from different providers may cover different ports, so a change across "
+        "providers is not necessarily a change in physical stocks."),
     "sulfur_price_cn": (
         "The day-to-day market price of sulfur in China, the world's biggest buyer.",
         "Normally when something gets pricey, sellers make more and the price calms down. "
         "Sulfur **can't do that** — it's a leftover from refining oil and gas, so nobody "
         "can conjure up extra just because prices are high. That makes the price almost a "
         "pure **fear-and-scarcity gauge**: when Gulf ships are stuck and the pantry is "
-        "draining, buyers scramble and bid it up fast (it's up ~277% in a year). It's the "
+        "draining, buyers scramble and bid it up fast. It's the "
         "fastest signal we have — it reacts in days, not weeks."),
     "gulf_sulfur_transits_wk": (
         "How many loaded sulfur ships leave the big Gulf ports each week.",

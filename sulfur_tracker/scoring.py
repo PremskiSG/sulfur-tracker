@@ -10,6 +10,7 @@ import statistics
 from dataclasses import dataclass, field
 
 from sulfur_tracker import db
+from sulfur_tracker.collectors.base import staleness_days
 from sulfur_tracker.config import scoring_config
 from sulfur_tracker.signal import GROUPS, SIGNAL_SPEC, Direction, MetricSpec
 
@@ -111,7 +112,8 @@ def _score_metric(conn, spec: MetricSpec, cfg: dict) -> SignalScore:
 
     values = [r["value"] for r in rows if r["value"] is not None]
     latest_val = latest["value"]
-    staleness = latest["staleness_days"] or 0
+    # Stored staleness describes the day the row was collected, not today.
+    staleness = staleness_days(latest["ts"])
     stale = staleness > spec.cadence_days
     z = 0.0
     if len(values) >= cfg["min_points_for_z"]:
