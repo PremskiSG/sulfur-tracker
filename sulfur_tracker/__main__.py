@@ -131,6 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
     tf = sub.add_parser("trade-flows",
                         help="backfill the browse-only per-country trade matrix (slow)")
     tf.add_argument("--months", type=int, default=18)
+    tf.add_argument("--lag", type=int, default=2,
+                    help="start this many months before the current month (default: 2)")
+    from sulfur_tracker.countries import TRADE_COUNTRIES
+    tf.add_argument("--country", choices=[c["name"] for c in TRADE_COUNTRIES],
+                    help="refresh one reporter only (default: all)")
     sub.add_parser("scan-prices",
                    help="LLM scan of news for KSP/Adnoc prices (needs DeepSeek key)")
     i = sub.add_parser("input", help="manual data entry")
@@ -178,8 +183,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  imported {n} price points into {args.metric}")
         return 0
     if args.cmd == "trade-flows":
-        print(f"  fetching {args.months} months of trade flows for 6 countries (slow)...")
-        counts = history.backfill_trade_flows(conn, months=args.months)
+        from sulfur_tracker.countries import TRADE_COUNTRIES
+        target = args.country or f"{len(TRADE_COUNTRIES)} countries"
+        print(f"  fetching {args.months} months of trade flows for {target} (slow)...")
+        counts = history.backfill_trade_flows(
+            conn, months=args.months, lag=args.lag, country=args.country)
         for k, v in counts.items():
             print(f"  {k:<12} {v} partner-rows")
         print(f"  total trade_flows rows: {db.flow_count(conn)}")

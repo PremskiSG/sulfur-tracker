@@ -137,17 +137,20 @@ def backfill_fred_acid(conn) -> int:
     return len(obs)
 
 
-def backfill_trade_flows(conn, months: int = 18, lag: int = 2) -> dict[str, int]:
-    """Populate the browse-only trade_flows matrix: for each of the six countries, the
-    full partner breakdown for the last `months` months. Slow (~6 x months Comtrade
-    calls); upserts, so it's safe to re-run. Returns {country: rows_written}."""
+def backfill_trade_flows(conn, months: int = 18, lag: int = 2,
+                         country: str | None = None) -> dict[str, int]:
+    """Populate the browse-only trade matrix for all reporters or one selected country.
+    Upserts the last `months` months, beginning `lag` months ago."""
     from sulfur_tracker.collectors.comtrade_flows import fetch_flows
     from sulfur_tracker.collectors.indonesia_imports import _shift_month
     from sulfur_tracker.countries import TRADE_COUNTRIES
 
     today = date.today()
     counts: dict[str, int] = {}
-    for c in TRADE_COUNTRIES:
+    selected = [c for c in TRADE_COUNTRIES if country is None or c["name"] == country]
+    if not selected:
+        raise ValueError(f"unknown trade-flow country: {country}")
+    for c in selected:
         written = 0
         for i in range(lag, lag + months):
             yy, mm = _shift_month(today.year, today.month, -i)

@@ -16,7 +16,9 @@ def test_gulf_membership():
 
 def test_trade_countries_config():
     names = [c["name"] for c in countries.TRADE_COUNTRIES]
-    assert names == ["Indonesia", "Morocco", "India", "Brazil", "USA", "Canada"]
+    assert names == ["Indonesia", "Morocco", "India", "Brazil", "USA", "Canada",
+                     "Poland"]
+    assert countries.name(40) == "Austria"
     for c in countries.TRADE_COUNTRIES:
         assert c["flow"] in ("M", "X")
         assert isinstance(c["reporter"], int)

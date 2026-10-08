@@ -41,4 +41,6 @@ def fetch_flows(reporter: int, flow: str, period: str, retries: int = 2,
         if pc in (0, None) or not wgt:
             continue
         out[pc] = out.get(pc, 0.0) + wgt / 1_000_000.0  # kg -> kt
-    return {k: round(v, 1) for k, v in out.items()}
+    # Preserve tonne precision. Rounding every small partner to 0.1 kt first can
+    # materially understate a reporter such as Poland when the table sums partners.
+    return {k: round(v, 3) for k, v in out.items()}

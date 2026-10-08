@@ -101,6 +101,16 @@ Several signals have no free automated feed and are entered with `tracker input`
 | China imports & acid exports | SMM customs write-ups (Comtrade dropped China after 2024) |
 | MHP output, CIF/CFR prices, MAP/DAP utilisation | SunSirs / SMM market reviews |
 
+## Monthly sulfur trade tables
+
+`tracker trade-flows` fetches HS 2503 partner-country quantities from UN Comtrade for
+Indonesia, Morocco, India, Brazil, the USA, Canada, and Poland. Poland is an export
+reporter: its partner columns are destinations, not origins. Its volume is below the
+older 200 kt/month inclusion rule, but is tracked explicitly. To refresh one country
+without querying every reporter: `tracker trade-flows --country Poland --months 18`.
+Use `--lag 1` to check whether the previous month has appeared; an empty month is not
+zero exports. The dashboard shows all stored months as a table.
+
 ## Signals
 
 | Signal | Tier | Cadence | Source (free) | Lag vs strait event | Main failure modes | Best paid upgrade |

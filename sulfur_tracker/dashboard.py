@@ -289,7 +289,8 @@ def _trade_flows_section(conn) -> None:
     st.divider()
     st.subheader("Trade flows (Comtrade)")
     st.caption("Who sells sulfur to whom, by month (HS 2503). Importer partner = origin; "
-               "exporter partner = destination. Mirror-derived, monthly, ~2-month lag — a "
+               "exporter partner = destination. Country-reported trade data, not vessel "
+               "tracking; monthly, with a reporting lag — a "
                "missing month is non-reporting, not zero. Browse-only, not scored. "
                "A month marked * comes from that country's own customs release (via SMM) "
                "rather than Comtrade, which still lags.")

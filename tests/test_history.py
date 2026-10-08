@@ -56,3 +56,18 @@ def test_comtrade_replaces_customs_remainder_for_same_month(conn, monkeypatch):
     ).fetchall()
     assert [(r["partner_code"], r["source"]) for r in rows] == [
         (124, "comtrade"), (784, "comtrade")]
+
+
+def test_trade_flows_can_refresh_poland_only(conn, monkeypatch):
+    calls = []
+
+    def fetched(reporter, flow, period):
+        calls.append((reporter, flow, period))
+        return {40: 2.7} if reporter == 616 else {}
+
+    monkeypatch.setattr("sulfur_tracker.collectors.comtrade_flows.fetch_flows", fetched)
+    counts = history.backfill_trade_flows(conn, months=2, lag=1, country="Poland")
+    assert counts == {"Poland": 2}
+    assert len(calls) == 2
+    assert all(reporter == 616 and flow == "X" for reporter, flow, _ in calls)
+    assert len(db.flow_matrix(conn, 616, "X")) == 2

@@ -29,3 +29,14 @@ def test_fetch_flows_dedupes_modes_and_drops_world(monkeypatch):
 def test_fetch_flows_empty(monkeypatch):
     monkeypatch.setattr(cf, "http_get", lambda *a, **k: _FakeResp({"data": []}))
     assert cf.fetch_flows(360, "M", "202603") == {}
+
+
+def test_fetch_flows_keeps_small_partner_shipments(monkeypatch):
+    payload = {"data": [
+        {"partnerCode": 40, "motCode": 0, "customsCode": "C00", "partner2Code": 0,
+         "netWgt": 46_000},
+        {"partnerCode": 276, "motCode": 0, "customsCode": "C00", "partner2Code": 0,
+         "netWgt": 2_725_385},
+    ]}
+    monkeypatch.setattr(cf, "http_get", lambda *a, **k: _FakeResp(payload))
+    assert cf.fetch_flows(616, "X", "202606") == {40: 0.046, 276: 2.725}
